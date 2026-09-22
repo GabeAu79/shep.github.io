@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wooly Acres</title>
+<style>
+  :root{
+    --ink:#e8e4d8; --dim:#9a9484; --frame:#3b2f24; --frame2:#5a4736;
+    --bg:#15120e; --panel:#241d16; --accent:#f2c14e; --good:#7ec850; --bad:#e0603c;
+    --fem:#ff7a9c; --mal:#79c0ff;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Courier New",Courier,monospace; font-weight:bold;
+    -webkit-font-smoothing:none; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #app{display:flex; flex-direction:column; gap:6px; padding:6px; height:100%; width:100%}
+  #topbar{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    background:var(--panel); border:3px solid var(--frame2); padding:5px 8px;
+  }
+  #title{color:var(--accent); letter-spacing:2px; font-size:15px; margin-right:4px}
+  .stat{background:#181310; border:2px solid var(--frame); padding:3px 7px; font-size:12px}
+  .stat b{color:var(--accent)}
+  .spacer{flex:1}
+  button{
+    font-family:inherit; font-weight:bold; font-size:12px; color:var(--ink);
+    background:var(--frame); border:2px solid var(--frame2); padding:4px 8px; cursor:pointer;
+  }
+  button:hover:not(:disabled){background:var(--frame2)}
+  button.on{background:var(--accent); color:#241d16; border-color:#fff0c0}
+  button:disabled{opacity:.4; cursor:not-allowed}
+  #buy,#buyWheat{background:#2f4a2a; border-color:#4f7a45}
+  #buy:hover:not(:disabled),#buyWheat:hover:not(:disabled){background:#3f6238}
+  #main{display:flex; gap:6px; flex:1; min-height:0}
+  #stage{
+    flex:1; display:flex; align-items:center; justify-content:center; min-width:0; min-height:0;
+    background:#0d1a0d; border:3px solid var(--frame2); overflow:hidden;
+  }
+  canvas{image-rendering:pixelated; image-rendering:crisp-edges; display:block; touch-action:none; cursor:grab}
+  canvas.grabbing{cursor:grabbing}
+  #side{width:214px; display:flex; flex-direction:column; gap:6px; min-height:0}
+  .box{background:var(--panel); border:3px solid var(--frame2); padding:7px; font-size:12px}
+  #panel h3,#log h3{margin:0 0 5px; font-size:11px; color:var(--accent); letter-spacing:1px}
+  #panelBody .row{display:flex; justify-content:space-between; gap:6px; margin:3px 0; color:var(--dim)}
+  #panelBody .row span:last-child{color:var(--ink); text-align:right}
+  #panelBody .nm{font-size:14px; margin-bottom:4px; word-break:break-word}
+  #ivBtn,#tieBtn,#sellBtn,#clrBtn{width:100%; margin-top:8px}
+  #sellBtn{background:#4a2a24; border-color:#7a4436}
+  #sellBtn:hover{background:#63382e}
+  #log{flex:1; overflow:hidden; display:flex; flex-direction:column}
+  #logList{list-style:none; margin:0; padding:0; font-size:11px; overflow:hidden; color:var(--dim)}
+  #logList li{margin:0 0 4px; line-height:1.25}
+  #logList li:first-child{color:var(--ink)}
+  .hint{color:var(--dim); font-size:11px; line-height:1.4}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div id="title">WOOLY ACRES</div>
+    <div class="stat">CASH <b id="cash">$0</b></div>
+    <div class="stat">FLOCK <b id="flock">0</b></div>
+    <div class="stat">CHOPS <b id="chops">0</b></div>
+    <div class="stat">WHEAT <b id="wheatN">0</b></div>
+    <div class="stat">DAY <b id="day">1</b></div>
+    <button id="buy">BUY SHEEP $25</button>
+    <button id="buyWheat">BUY WHEAT $1</button>
+    <div class="spacer"></div>
+    <button id="sp0">II</button>
+    <button id="sp1" class="on">1x</button>
+    <button id="sp2">2x</button>
+    <button id="sp4">4x</button>
+    <button id="mute">SOUND: ON</button>
+    <button id="reset">NEW FLOCK</button>
+  </div>
+  <div id="main">
+    <div id="stage"><canvas id="c" width="460" height="290"></canvas></div>
+    <div id="side">
+      <div class="box" id="panel">
+        <h3>SHEEP INFO</h3>
+        <div id="panelBody"><div class="hint">Click a sheep to inspect it.<br><br>Drag sheep with the mouse. Drop them in a pen, or into the chop factory to sell them.<br><br>Drag a box on the grass to pick several sheep at once, then drag any one of them.<br><br>Wheat bought up top can be fed to the breeding pen with the trough button.</div></div>
+      </div>
+      <div class="box" id="log">
+        <h3>FARM LOG</h3>
+        <ul id="logList"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+"use strict";
+/* ---------- tiny 3x5 pixel font ---------- */
+const FONT = {
+  A:"25755",B:"65656",C:"34443",D:"65556",E:"74647",F:"74644",G:"34553",H:"55755",
+  I:"72227",J:"11152",K:"55655",L:"44447",M:"57555",N:"65555",O:"25552",P:"65644",
+  Q:"25531",R:"65655",S:"34216",T:"72222",U:"55552",V:"55522",W:"55575",X:"55255",
+  Y:"55222",Z:"71247",
+  "0":"75557","1":"26227","2":"61247","3":"61216","4":"55711","5":"74616",
+  "6":"34757","7":"71222","8":"75757","9":"75716",
+  " ":"00000","(":"12221",")":"42224",".":"00002",",":"00024","-":"00700",
+  "+":"02720","!":"22202","?":"61202","'":"22000",":":"02020","/":"11242","$":"27675"
+};
+function drawText(ctx,str,x,y,color,sc){
+  sc=sc||1; ctx.fillStyle=color;
+  let cx=Math.round(x); y=Math.round(y);
+  const S=String(str).toUpperCase();
+  for(let i=0;i<S.length;i++){
+    const g=FONT[S[i]]||FONT["?"];
+    for(let r=0;r<5;r++){
+      const bits=parseInt(g[r],8);
+      for(let c=0;c<3;c++) if(bits&(4>>c)) ctx.fillRect(cx+c*sc,y+r*sc,sc,sc);
+    }
+    cx+=4*sc;
+  }
+}
+function textW(str,sc){ sc=sc||1; return String(str).length*4*sc-sc; }
+function drawTextShadow(ctx,str,x,y,color,sc){
+  sc=sc||1;
+  drawText(ctx,str,x+sc,y+sc,"rgba(0,0,0,0.6)",sc);
+  drawText(ctx,str,x,y,color,sc);
+}
+/* crisp headline: chunky glyphs on a solid plate */
+function drawSign(ctx,str,cx,y,color,sc,plate,edge){
+  sc=sc||2;
+  const w=textW(str,sc), x=Math.round(cx-w/2);
+  ctx.fillStyle=edge||"#2a2118"; ctx.fillRect(x-4,y-3,w+8,5*sc+6);
+  ctx.fillStyle=plate||"#4a3a28"; ctx.fillRect(x-3,y-2,w+6,5*sc+4);
+  drawText(ctx,str,x,y,color,sc);
+}
+
+/* ---------- utils ---------- */
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const rint=(a,b)=>Math.floor(rnd(a,b+1));
+const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const inRect=(x,y,r)=>x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h;
+
+/* ---------- world geometry (recomputed on resize) ---------- */
+let W=460,H=290,SCALE=2;
+let PASTURE,HOLD,BREED,FACTORY,CHUTE,OUTPUT,ROAD,WHEATBTN,TALLY;
+function layout(){
+  const stage=document.getElementById("stage");
+  const sw=Math.max(300,stage.clientWidth-6), sh=Math.max(220,stage.clientHeight-6);
+  SCALE=(sw>=920&&sh>=580)?2:1;
+  W=clamp(Math.floor(sw/SCALE),460,1000);
+  H=clamp(Math.floor(sh/SCALE),290,640);
+  const cvs=document.getElementById("c");
+  cvs.width=W; cvs.height=H;
+  cvs.style.width=(W*SCALE)+"px"; cvs.style.height=(H*SCALE)+"px";
+  const band=76;
+  PASTURE={x:4,y:16,w:W-8,h:H-16-band};
+  const pw=clamp(Math.round(W*0.22),110,190), ph=clamp(Math.round(PASTURE.h*0.34),72,130);
+  HOLD ={x:PASTURE.x+14,y:PASTURE.y+18,w:pw,h:ph};
+  BREED={x:PASTURE.x+PASTURE.w-14-pw,y:PASTURE.y+18,w:pw,h:ph};
+  const fw=150,fh=54;
+  FACTORY={x:Math.round(W/2-fw/2),y:H-fh-5,w:fw,h:fh};
+  CHUTE  ={x:FACTORY.x+24,y:FACTORY.y-13,w:74,h:15};
+  OUTPUT ={x:FACTORY.x+FACTORY.w+2,y:FACTORY.y+24};
+  ROAD   ={y:PASTURE.y+PASTURE.h+2,h:Math.max(8,FACTORY.y-(PASTURE.y+PASTURE.h)+10)};
+  const bw2=Math.min(BREED.w,100);
+  WHEATBTN={x:Math.round(BREED.x+BREED.w/2-bw2/2),y:BREED.y+BREED.h+9,w:bw2,h:17};
+  const tw2=clamp(Math.max(HOLD.w,154),154,200);
+  TALLY={x:clamp(Math.round(HOLD.x+HOLD.w/2-tw2/2),4,W-4-tw2),y:HOLD.y+HOLD.h+9,w:tw2,h:25};
+  refreshObstacles();
+  buildScenery();
+}
+
+/* ---------- tunables ---------- */
+const STEP=1/30;
+const MATURE=40;
+const BREED_CD=45;
+const RATE_PASTURE=0.07;
+const RATE_BREEDPEN=0.55;
+const NEAR=26;
+const COLD_PERIOD=60, COLD_CHANCE=0.12;
+const IV_COST=30, PRICE_ADULT=12, PRICE_LAMB=5, BUY_COST=25, WHEAT_COST=1;
+function popCap(){ return clamp(Math.round(PASTURE.w*PASTURE.h/7000*1.5),36,83); }
+
+/* ---------- names ---------- */
+const NAMES=["BARTHOLOMEW","JIMOTHY","GERTRUDE","WINNIFRED","ARCHIBALD","PRUDENCE",
+"MORTIMER","HYACINTH","CLETUS","WILHELMINA","THADDEUS","NORBERT","AGNES","PERCIVAL",
+"LORETTA","DORIS","IGNATIUS","PHYLLIS","WALDO","HILDEGARD","MAUDE","RUTHERFORD",
+"GLADYS","HORACE","BEVERLY","CORNELIUS","BEATRIX","FITZGERALD","EUGENIA","REGINALD",
+"BARNABY","ETHELBERT","CLEMENTINE","BERNADETTE","CHADWICK","SHELDON","MUFFIN",
+"GUS","OSWALD","TABITHA","ELMER","ROSALIND","BUFORD","MILDRED","LEOPOLD","EDNA",
+"AMBROSE","PETUNIA","HUBERT","MARGE","SEYMOUR","BLANCHE","FERGUS","OPAL","ZEBULON",
+"DELPHINE","ORVILLE","BERTHA","LOWELL","JEMIMA","SPUD","NIGEL","WANDA","CHESTER",
+"GRISELDA","BASIL","MAVIS","OTTO","PEARL","SILAS","VERNA","DEWEY","FLOSSIE","HANK"];
+let namePool=[], nameLap=1;
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=rint(0,i);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function nextName(){
+  if(!namePool.length){ namePool=shuffle(NAMES.slice()); nameLap++; }
+  const n=namePool.pop();
+  return nameLap>1? n+" "+"I".repeat(Math.min(nameLap,4)) : n;
+}
+
+/* ---------- genetics (never surfaced in the UI) ---------- */
+function coatOf(g){ return g.coat.indexOf("W")>=0 ? "white":"black"; }
+function legsOf(g){ return g.legs.indexOf("L")>=0 ? "short":"long"; }
+function isBald(g){ return g.sex==="M" ? g.xa[0]==="b" : (g.xa[0]==="b"&&g.xa[1]==="b"); }
+function gt(coat,legs,sex,xa){ return {coat:coat.split(""),legs:legs.split(""),sex:sex,xa:xa.split("")}; }
+function breedGenotypes(mom,dad){
+  const coat=[pick(mom.coat),pick(dad.coat)];
+  const legs=[pick(mom.legs),pick(dad.legs)];
+  const momX=pick(mom.xa);
+  if(Math.random()<0.5) return {coat:coat,legs:legs,sex:"M",xa:[momX]};
+  return {coat:coat,legs:legs,sex:"F",xa:[momX,dad.xa[0]]};
+}
+/* market stock: random draw from the trader's herd */
+function randomGenotype(){
+  const a=p=>Math.random()<p?"W":"w", b=p=>Math.random()<p?"L":"l", x=()=>Math.random()<0.18?"b":"B";
+  const coat=[a(0.4),a(0.4)], legs=[b(0.35),b(0.35)];
+  if(Math.random()<0.5) return {coat:coat,legs:legs,sex:"M",xa:[x()]};
+  return {coat:coat,legs:legs,sex:"F",xa:[x(),x()]};
+}
+/* opening flock: one male and one female of each coat, legs dealt at random.
+   nothing is hidden here - the third trait has to arrive from somewhere else */
+function seedFlock(){
+  const legs=shuffle(["ll","ll","Ll","Ll"]);
+  const base=[
+    {n:"BARTHOLOMEW",coat:"Ww",sex:"M"},
+    {n:"WINNIFRED",  coat:"Ww",sex:"F"},
+    {n:"MORTIMER",   coat:"ww",sex:"M"},
+    {n:"GERTRUDE",   coat:"ww",sex:"F"}
+  ];
+  return base.map((b,i)=>({n:b.n,g:gt(b.coat,legs[i],b.sex,b.sex==="M"?"B":"BB")}));
+}
+
+/* ---------- state ---------- */
+let sheep=[], storks=[], bundles=[], puffs=[], floaters=[], hearts=[], chops=[], trucks=[], descents=[];
+let divineAt=120, flash=0;
+let group=[], marquee=null, tallyMode=0;   /* 0 = tally by build, 1 = males vs females */
+const inGroup=s=>group.indexOf(s)>=0;
+function unselect(s){ if(selected===s) selected=null; const i=group.indexOf(s); if(i>=0) group.splice(i,1); }   /* first heavenly delivery is due at the start of day 3 */
+let money=0, chopCount=0, wheat=0, mouseX=-99, mouseY=-99, rtime=0, simTime=0, speed=1, muted=false, nextId=1, selected=null, capWarn=0;
+
+function freeSpot(){
+  for(let i=0;i<300;i++){
+    const x=rnd(PASTURE.x+16,PASTURE.x+PASTURE.w-16);
+    const y=rnd(HOLD.y+HOLD.h+14,PASTURE.y+PASTURE.h-8);
+    if(!blockedAt(x,y)) return {x:x,y:y};
+  }
+  return {x:W/2,y:PASTURE.y+PASTURE.h-20};
+}
+function makeSheep(name,g,x,y,age,parents){
+  const s=freeSpot();
+  return {
+    id:nextId++, name:name, g:g,
+    x:(x==null?s.x:x), y:(y==null?s.y:y),
+    vx:0, vy:0, face:Math.random()<0.5?-1:1,
+    state:"walk", st:rnd(1,3), age:(age==null?MATURE+rnd(0,20):age),
+    cd:0, cold:rnd(0,COLD_PERIOD), iv:false,
+    parents:parents||null, bob:Math.random()*6.28, drag:false
+  };
+}
+/* the pens plus the two signboards, which sheep must not stand behind */
+let OBST=[];
+const inflate=r=>({x:r.x-4,y:r.y-4,w:r.w+8,h:r.h+38});
+function refreshObstacles(){ OBST=[HOLD,BREED,inflate(TALLY),inflate(WHEATBTN)]; }
+function blockedAt(x,y){ for(let i=0;i<OBST.length;i++) if(inRect(x,y,OBST[i])) return OBST[i]; return null; }
+function settle(s){
+  if(zoneOf(s)!=="field") return;
+  const r=blockedAt(s.x,s.y);
+  if(!r) return;
+  const below=r.y+r.h+3;
+  s.y=(below<=PASTURE.y+PASTURE.h-4)?below:(r.y-3);
+  s.y=clamp(s.y,PASTURE.y+6,PASTURE.y+PASTURE.h-4);
+  if(blockedAt(s.x,s.y)) s.x=clamp(r.x+r.w+14,PASTURE.x+8,PASTURE.x+PASTURE.w-8);
+}
+function adult(s){ return s.age>=MATURE; }
+function bodyH(s){ const f=adult(s)?1:0.6; return isBald(s.g)?Math.max(4,Math.round(12*f)-4):Math.round(12*f); }
+function legLenOf(s){ return Math.round((legsOf(s.g)==="long"?22:6)*(adult(s)?1:0.6)); }
+function topOf(s){ return s.y-legLenOf(s)-bodyH(s); }
+function zoneOf(s){
+  if(inRect(s.x,s.y,HOLD)) return "hold";
+  if(inRect(s.x,s.y,BREED)) return "breed";
+  return "field";
+}
+function log(msg){
+  const ul=document.getElementById("logList");
+  const li=document.createElement("li");
+  li.textContent="> "+msg;
+  ul.insertBefore(li,ul.firstChild);
+  while(ul.children.length>10) ul.removeChild(ul.lastChild);
+}
+
+/* ---------- audio ---------- */
+let AC=null;
+function blip(freq,dur,type,vol){
+  if(muted) return;
+  try{
+    if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)();
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type=type||"square"; o.frequency.value=freq;
+    g.gain.value=vol||0.05;
+    g.gain.exponentialRampToValueAtTime(0.0001,AC.currentTime+dur);
+    o.connect(g); g.connect(AC.destination);
+    o.start(); o.stop(AC.currentTime+dur);
+  }catch(e){}
+}
+const sndBirth=()=>{blip(660,0.08);setTimeout(()=>blip(880,0.12),90);};
+const sndSale =()=>{blip(520,0.06);setTimeout(()=>blip(780,0.10),70);};
+const sndDeath=()=>{blip(220,0.25,"sawtooth",0.04);};
+const sndPick =()=>blip(400,0.04,"square",0.03);
+const sndHorn =()=>{blip(300,0.16,"square",0.04);setTimeout(()=>blip(240,0.2,"square",0.04),170);};
+
+/* ---------- effects ---------- */
+function puff(x,y,n,col){
+  for(let i=0;i<(n||6);i++) puffs.push({x:x+rnd(-4,4),y:y+rnd(-4,4),vx:rnd(-12,12),vy:rnd(-22,-6),t:rnd(0.4,0.9),m:rnd(0.4,0.9),c:col||"#d8d4c8"});
+}
+function floater(x,y,txt,col){ floaters.push({x:x,y:y,t:1.6,txt:txt,c:col||"#f2c14e"}); }
+
+/* ---------- simulation ---------- */
+let breedTick=0;
+function step(dt){
+  simTime+=dt;
+  TALLY.h=12+Math.max(1,penTally().rows.length)*9+4;
+  OBST[2]=inflate(TALLY);
+  if(capWarn>0) capWarn-=dt;
+
+  for(let i=sheep.length-1;i>=0;i--){
+    const s=sheep[i];
+    s.age+=dt; if(s.cd>0) s.cd-=dt; s.bob+=dt*3;
+
+    if(isBald(s.g)){
+      s.cold+=dt;
+      if(s.cold>=COLD_PERIOD){
+        s.cold-=COLD_PERIOD;
+        if(!s.iv && Math.random()<COLD_CHANCE){
+          puff(s.x,s.y-10,10,"#cfe6ff"); sndDeath();
+          log(s.name+" ("+s.g.sex+") shivered through the night and did not wake.");
+          unselect(s);
+          sheep.splice(i,1); continue;
+        }
+      }
+    }
+    if(s.drag) continue;
+
+    if(s.tied){                       /* roped to a post: still grazes, never wanders */
+      s.vx=0; s.vy=0; s.st-=dt;
+      if(s.st<=0){ s.state=(s.state==="graze")?"walk":"graze"; s.st=rnd(2,5); }
+      continue;
+    }
+
+    s.st-=dt;
+    if(s.st<=0){
+      if(s.state==="walk"){ s.state="graze"; s.st=rnd(1.8,4.5); s.vx=0; s.vy=0; }
+      else{
+        s.state="walk"; s.st=rnd(1.5,4);
+        const a=rnd(0,6.283), sp=adult(s)?rnd(7,13):rnd(9,17);
+        s.vx=Math.cos(a)*sp; s.vy=Math.sin(a)*sp*0.55;
+      }
+    }
+    if(s.state==="walk"){
+      let nx=s.x+s.vx*dt, ny=s.y+s.vy*dt;
+      const z=zoneOf(s);
+      if(z==="field"){
+        if(blockedAt(nx,ny)){ s.vx*=-1; s.vy*=-1; nx=s.x; ny=s.y; }
+        nx=clamp(nx,PASTURE.x+8,PASTURE.x+PASTURE.w-8);
+        ny=clamp(ny,PASTURE.y+6,PASTURE.y+PASTURE.h-4);
+      }else{
+        const r=(z==="hold")?HOLD:BREED;
+        nx=clamp(nx,r.x+8,r.x+r.w-8); ny=clamp(ny,r.y+14,r.y+r.h-5);
+      }
+      if(nx===s.x) s.vx*=-1;
+      if(ny===s.y) s.vy*=-1;
+      if(Math.abs(s.vx)>0.5) s.face=s.vx<0?-1:1;
+      s.x=nx; s.y=ny;
+    }
+  }
+
+  /* courtship */
+  breedTick+=dt;
+  if(breedTick>=0.25){
+    const d=breedTick; breedTick=0;
+    for(let i=0;i<sheep.length;i++){
+      const a=sheep[i];
+      if(!adult(a)||a.cd>0||a.drag) continue;
+      const za=zoneOf(a); if(za==="hold") continue;
+      for(let j=i+1;j<sheep.length;j++){
+        const b=sheep[j];
+        if(!adult(b)||b.cd>0||b.drag||b.g.sex===a.g.sex) continue;
+        if(zoneOf(b)!==za) continue;
+        const dx=a.x-b.x, dy=(a.y-b.y)*1.6;
+        if(dx*dx+dy*dy>NEAR*NEAR) continue;
+        const rate=(za==="breed")?RATE_BREEDPEN:RATE_PASTURE;
+        if(Math.random()<rate*d){
+          if(sheep.length+storks.length+bundles.length>=popCap()){ capWarn=3; continue; }
+          courtship(a,b); a.cd=BREED_CD; b.cd=BREED_CD; break;
+        }
+      }
+    }
+  }
+
+  for(let i=hearts.length-1;i>=0;i--){
+    const h=hearts[i]; h.t-=dt; h.y-=14*dt; h.x+=Math.sin(h.t*6)*8*dt;
+    if(h.t<=0) hearts.splice(i,1);
+  }
+  for(let i=storks.length-1;i>=0;i--){
+    const k=storks[i]; k.wait-=dt;
+    if(k.wait>0) continue;
+    k.x+=k.dir*58*dt; k.y+=Math.sin(simTime*2.2)*6*dt; k.flap+=dt*9;
+    if(!k.dropped && ((k.dir>0&&k.x>=k.dropX)||(k.dir<0&&k.x<=k.dropX))){
+      k.dropped=true;
+      bundles.push({x:k.x,y:k.y+6,vy:8,land:k.landY,g:k.g,parents:k.pn});
+    }
+    if(k.x<-70||k.x>W+70) storks.splice(i,1);
+  }
+  for(let i=bundles.length-1;i>=0;i--){
+    const b=bundles[i]; b.vy+=40*dt; b.y+=b.vy*dt;
+    if(b.y>=b.land){
+      bundles.splice(i,1);
+      const nm=nextName();
+      const lamb=makeSheep(nm,b.g,clamp(b.x,PASTURE.x+12,PASTURE.x+PASTURE.w-12),b.land,0,b.parents);
+      settle(lamb); sheep.push(lamb);
+      puff(b.x,b.land-4,8,"#ffffff"); sndBirth();
+      log(nm+" ("+b.g.sex+") was delivered to "+b.parents[0]+" and "+b.parents[1]+".");
+    }
+  }
+  /* delivery truck */
+  for(let i=trucks.length-1;i>=0;i--){
+    const t=trucks[i];
+    if(t.phase==="in"){
+      t.x+=110*dt;
+      if(t.x>=t.stopX){ t.x=t.stopX; t.phase="wait"; t.t=1.1; }
+    }else if(t.phase==="wait"){
+      t.t-=dt;
+      if(t.t<=0){
+        t.phase="out";
+        const nm=nextName();
+        const s=makeSheep(nm,t.g,t.x+18,PASTURE.y+PASTURE.h-10,MATURE+rnd(5,30),null);
+        s.bought=true; settle(s); sheep.push(s);
+        puff(s.x,s.y-8,8,"#c8b89a"); sndBirth();
+        log(nm+" ("+t.g.sex+") was unloaded from the trader's truck.");
+      }
+    }else{
+      t.x+=130*dt;
+      if(t.x>W+60) trucks.splice(i,1);
+    }
+  }
+  /* lamb chops on the output belt */
+  for(let i=chops.length-1;i>=0;i--){
+    const c=chops[i];
+    if(c.wait>0){ c.wait-=dt; continue; }
+    c.t-=dt;
+    if(!c.landed){
+      c.vy+=90*dt; c.x+=c.vx*dt; c.y+=c.vy*dt; c.spin+=dt*8;
+      if(c.y>=c.land){ c.y=c.land; c.landed=true; c.vx=0; }
+    }
+    if(c.t<=0) chops.splice(i,1);
+  }
+  /* a frail sheep is always out there somewhere */
+  const baldAround = descents.length>0 || sheep.some(s=>isBald(s.g)) || bundles.some(b=>isBald(b.g));
+  if(baldAround) divineAt=null;
+  else if(divineAt===null) divineAt=simTime+180;
+  else if(simTime>=divineAt){ divineAt=null; summonSheep(); }
+  for(let i=descents.length-1;i>=0;i--){
+    const d=descents[i]; d.t+=dt; d.spark+=dt;
+    if(d.spark>0.06){
+      d.spark=0;
+      puffs.push({x:d.x+rnd(-16,16),y:rnd(0,d.s.y),vx:rnd(-4,4),vy:rnd(-30,-10),t:rnd(0.5,1.1),m:0.5,c:Math.random()<0.5?"#fff6c8":"#f2c14e"});
+    }
+    if(d.phase==="beam"){
+      if(d.t>=1.3){ d.phase="fall"; d.t=0; flash=0.3; blip(523,0.18,"sine",0.05); setTimeout(()=>blip(659,0.18,"sine",0.05),150); setTimeout(()=>blip(784,0.35,"sine",0.05),300); }
+    }else if(d.phase==="fall"){
+      d.s.y+=36*dt;
+      if(d.s.y>=d.landY){
+        d.s.y=d.landY; d.phase="land"; d.t=0;
+        settle(d.s); sheep.push(d.s); puff(d.x,d.landY-6,14,"#fff6c8"); flash=0.18;
+        log(d.s.name+" ("+d.s.g.sex+") descended from the heavens.");
+        blip(880,0.3,"sine",0.05);
+      }
+    }else if(d.t>=1.6) descents.splice(i,1);
+  }
+  if(flash>0) flash-=dt*1.6;
+
+  for(let i=puffs.length-1;i>=0;i--){
+    const p=puffs[i]; p.t-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=26*dt;
+    if(p.t<=0) puffs.splice(i,1);
+  }
+  for(let i=floaters.length-1;i>=0;i--){
+    const f=floaters[i]; f.t-=dt; f.y-=16*dt;
+    if(f.t<=0) floaters.splice(i,1);
+  }
+}
+
+function courtship(a,b){
+  const mom=a.g.sex==="F"?a:b, dad=a.g.sex==="F"?b:a;
+  const childG=breedGenotypes(mom.g,dad.g);
+  for(const s of [a,b]) for(let i=0;i<5;i++)
+    hearts.push({x:s.x+rnd(-8,8),y:topOf(s)-12-rnd(0,10),t:rnd(1.0,2.0)});
+  blip(740,0.05,"sine",0.03);
+  /* the stork brings the lamb to wherever its parents are standing */
+  const mx=clamp((a.x+b.x)/2+rnd(-6,6),PASTURE.x+14,PASTURE.x+PASTURE.w-14);
+  const my=clamp((a.y+b.y)/2+rnd(4,12),PASTURE.y+12,PASTURE.y+PASTURE.h-8);
+  const dir=(mx>W/2)?1:-1;
+  storks.push({
+    x:dir>0?-60:W+60, y:clamp(my-46,8,44), dir:dir, flap:0, wait:1.6, dropped:false,
+    dropX:mx, landY:my, g:childG, pn:[mom.name,dad.name]
+  });
+}
+
+/* ---------- a gift from above ---------- */
+function summonSheep(){
+  const base=randomGenotype();
+  const g={coat:base.coat,legs:base.legs,sex:"M",xa:["b"]};
+  const x=clamp(rnd(PASTURE.x+W*0.3,PASTURE.x+W*0.7),PASTURE.x+40,PASTURE.x+PASTURE.w-40);
+  const landY=rnd(HOLD.y+HOLD.h+30,PASTURE.y+PASTURE.h-20);
+  const s=makeSheep(nextName(),g,x,-24,MATURE+rnd(2,18),null);
+  s.divine=true; s.state="graze"; s.st=2.5;
+  descents.push({x:x,s:s,landY:landY,phase:"beam",t:0,spark:0});
+  log("The clouds part over Wooly Acres. Something is coming down.");
+  blip(392,0.5,"sine",0.04);
+}
+
+/* ---------- wheat ---------- */
+function penPairs(){
+  const males=[], females=[];
+  for(const s of sheep){
+    if(!adult(s)||s.drag||zoneOf(s)!=="breed") continue;
+    (s.g.sex==="M"?males:females).push(s);
+  }
+  const n=Math.min(males.length,females.length), out=[];
+  for(let i=0;i<n;i++) out.push([males[i],females[i]]);
+  return out;
+}
+function feedWheat(){
+  const pairs=penPairs();
+  if(wheat<=0||!pairs.length) return;
+  const room=popCap()-(sheep.length+storks.length+bundles.length);
+  if(room<=0){ capWarn=3; return; }
+  wheat--;
+  let made=0;
+  for(const [m,f] of pairs){
+    if(made>=room) break;
+    courtship(m,f); m.cd=BREED_CD; f.cd=BREED_CD; made++;
+  }
+  for(const s of sheep) if(zoneOf(s)==="breed")
+    for(let i=0;i<3;i++) puffs.push({x:s.x+rnd(-8,8),y:s.y-2,vx:rnd(-10,10),vy:rnd(-20,-6),t:rnd(0.5,0.9),m:0.8,c:"#e0c264"});
+  floater(BREED.x+BREED.w/2,BREED.y+BREED.h-8,"+"+made,"#ff9ec4");
+  log("A bundle of wheat went into the breeding pen. "+made+" pair"+(made===1?"":"s")+" paired off.");
+  blip(560,0.06,"square",0.04); setTimeout(()=>blip(720,0.10,"square",0.04),80);
+  updateHUD();
+}
+function buyWheat(){
+  if(money<WHEAT_COST) return;
+  money-=WHEAT_COST; wheat++;
+  floater(BREED.x+BREED.w/2,BREED.y-30,"-$"+WHEAT_COST,"#e0603c");
+  blip(640,0.06,"sine",0.04);
+  updateHUD();
+}
+
+/* ---------- rendering ---------- */
+const cvs=document.getElementById("c"), ctx=cvs.getContext("2d");
+ctx.imageSmoothingEnabled=false;
+function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); }
+
+let seedN=1337;
+function sr(){ seedN=(seedN*1103515245+12345)&0x7fffffff; return seedN/0x7fffffff; }
+let TUFTS=[],FLOWERS=[],ROCKS=[],PEBBLES=[];
+function buildScenery(){
+  seedN=1337; TUFTS=[];FLOWERS=[];ROCKS=[];PEBBLES=[];
+  const n=Math.round(PASTURE.w*PASTURE.h/580);
+  for(let i=0;i<n;i++) TUFTS.push({x:Math.floor(sr()*W),y:Math.floor(PASTURE.y+sr()*PASTURE.h),s:sr()<0.5?1:2});
+  for(let i=0;i<Math.round(n/9);i++) FLOWERS.push({x:Math.floor(sr()*W),y:Math.floor(PASTURE.y+10+sr()*(PASTURE.h-12)),c:sr()<0.5?"#e8d24a":"#e07ab0"});
+  for(let i=0;i<Math.round(n/26);i++) ROCKS.push({x:Math.floor(sr()*W),y:Math.floor(PASTURE.y+20+sr()*(PASTURE.h-26))});
+  for(let i=0;i<40;i++) PEBBLES.push({x:Math.floor(sr()*W),y:Math.floor(ROAD.y+sr()*ROAD.h)});
+}
+
+function drawFence(r,label,accent,sign){
+  px(r.x,r.y,r.w,r.h,"#6e8a46");
+  for(let i=0;i<Math.round(r.w*r.h/90);i++){
+    const gx=r.x+3+Math.floor(sr()*(r.w-6)), gy=r.y+3+Math.floor(sr()*(r.h-6));
+    px(gx,gy,1,1,sr()<0.5?"#5d7a3c":"#7d9a52");
+  }
+  const post="#8a6a3e", rail="#a5814c", dark="#6b5230";
+  for(const yy of [r.y,r.y+r.h-1]){
+    px(r.x-3,yy-2,r.w+6,1,rail);
+    px(r.x-3,yy+1,r.w+6,1,rail);
+    px(r.x-3,yy+2,r.w+6,1,dark);
+  }
+  for(const xx of [r.x,r.x+r.w-1]){
+    px(xx-2,r.y-2,1,r.h+5,rail);
+    px(xx+1,r.y-2,1,r.h+5,rail);
+  }
+  for(let x=r.x;x<=r.x+r.w-2;x+=16){
+    px(x,r.y-5,2,9,post); px(x,r.y-5,2,1,rail);
+    px(x,r.y+r.h-5,2,9,post);
+  }
+  px(r.x+r.w-2,r.y-5,2,9,post); px(r.x+r.w-2,r.y+r.h-5,2,9,post);
+  for(let y=r.y;y<=r.y+r.h-2;y+=18){ px(r.x-2,y,4,2,post); px(r.x+r.w-2,y,4,2,post); }
+  const cx=r.x+r.w/2;
+  px(cx-textW(label,2)/2-2,r.y-13,2,10,post);
+  px(cx+textW(label,2)/2,r.y-13,2,10,post);
+  drawSign(ctx,label,cx,r.y-21,accent,2,"#7a5c34","#4a3820");
+  if(sign){
+    const bh=Math.floor(simTime*3)%2;
+    const hx=cx+textW(label,2)/2+10, hy=r.y-20+bh;
+    px(hx,hy,2,2,"#ff5c8a"); px(hx+3,hy,2,2,"#ff5c8a");
+    px(hx,hy+2,5,2,"#ff5c8a"); px(hx+1,hy+4,3,1,"#ff5c8a"); px(hx+2,hy+5,1,1,"#ff5c8a");
+  }
+}
+
+function drawChop(x,y,sc){
+  sc=sc||1;
+  px(x,y,6*sc,4*sc,"#8a3a3a");
+  px(x+sc,y+sc,4*sc,2*sc,"#d46a6a");
+  px(x+2*sc,y+sc,2*sc,1*sc,"#e89494");
+  px(x+5*sc,y-sc,2*sc,2*sc,"#f2ead6");
+  px(x+5*sc,y+3*sc,2*sc,sc,"#f2ead6");
+}
+
+function drawFactory(){
+  const f=FACTORY;
+  /* output belt + crate */
+  const bx=f.x+f.w, by=f.y+28;
+  px(bx,by,34,6,"#4a4a52"); px(bx,by,34,2,"#6b6b76");
+  const off=Math.floor(simTime*16)%6;
+  for(let i=-1;i<6;i++) px(bx+2+i*6+off,by+3,3,1,"#8b8b96");
+  px(bx+30,by+6,2,10,"#4a4a52");
+  px(bx+34,by-8,20,16,"#8a6a3e"); px(bx+34,by-8,20,2,"#a5814c");
+  px(bx+36,by-6,16,12,"#6b5230");
+  drawChop(bx+38,by-4,1); drawChop(bx+44,by-1,1);
+  /* building */
+  px(f.x-3,f.y-6,f.w+6,6,"#4a4a52");
+  px(f.x,f.y,f.w,f.h,"#6b6b76");
+  px(f.x,f.y,f.w,3,"#8b8b96");
+  px(f.x+2,f.y+f.h-3,f.w-4,3,"#4a4a52");
+  for(let i=0;i<4;i++){ px(f.x+10+i*34,f.y+22,18,12,"#3c4a5a"); px(f.x+10+i*34,f.y+22,18,2,"#54687e"); }
+  px(f.x+14,f.y-20,10,20,"#5a5a64"); px(f.x+13,f.y-22,12,3,"#7a7a86");
+  /* chute */
+  px(CHUTE.x-2,CHUTE.y-2,CHUTE.w+4,CHUTE.h+4,"#3a3a42");
+  px(CHUTE.x,CHUTE.y,CHUTE.w,CHUTE.h,"#4a4a52");
+  px(CHUTE.x+2,CHUTE.y+2,CHUTE.w-4,CHUTE.h-4,"#1a1a22");
+  for(let i=0;i<6;i++) px(CHUTE.x+4+i*11,CHUTE.y+CHUTE.h-4,6,2,"#6b6b76");
+  drawSign(ctx,"CHOP CO.",f.x+f.w/2,f.y+7,"#f2c14e",2,"#4a4a52","#2a2a32");
+  drawSign(ctx,"DROP SHEEP HERE",CHUTE.x+CHUTE.w/2,CHUTE.y-15,"#ffffff",1,"#4a3a28","#2a2118");
+  const t=Math.floor(simTime*2);
+  for(let i=0;i<3;i++){
+    const a=(t+i)%3;
+    px(f.x+16+Math.sin((simTime+i)*1.4)*3,f.y-26-i*7-a,6-i,4,"rgba(200,200,210,0.35)");
+  }
+}
+
+function drawTruck(t){
+  const x=Math.round(t.x), y=Math.round(t.y);
+  px(x-2,y-14,26,12,"#7a5a3a"); px(x-2,y-14,26,2,"#9a7a52");
+  for(let i=0;i<4;i++) px(x+2+i*6,y-20,1,6,"#9a7a52");
+  px(x-2,y-19,26,1,"#9a7a52");
+  px(x+24,y-16,14,14,"#c05a3a"); px(x+24,y-16,14,2,"#e07a56");
+  px(x+27,y-13,8,6,"#7ec0e0"); px(x+37,y-8,2,3,"#f2ea9a");
+  px(x-2,y-2,40,3,"#4a3a2a");
+  const w=Math.floor(simTime*10)%2;
+  px(x+2,y+1,6,5,"#2a2a30"); px(x+3+w,y+2,3,3,"#6b6b76");
+  px(x+28,y+1,6,5,"#2a2a30"); px(x+29+w,y+2,3,3,"#6b6b76");
+}
+
+function sheepPalette(g){
+  if(isBald(g)) return {body:"#e8a89c",shade:"#c8817a",leg:"#d09488",eye:"#3a2a26",fluff:null,out:"#a3655e"};
+  if(coatOf(g)==="black") return {body:"#3a3844",shade:"#26242e",leg:"#1e1c26",eye:"#f0f0f0",fluff:"#4a4856",out:"#17161d"};
+  return {body:"#f4f1e4",shade:"#d6d2c2",leg:"#c9b79a",eye:"#2a2118",fluff:"#ffffff",out:"#b5b1a0"};
+}
+
+function drawSheep(s,lift){
+  const grown=adult(s), f=grown?1:0.6;
+  const bw=Math.round(20*f), bh=bodyH(s), legLen=legLenOf(s), legW=grown?2:1;
+  const p=sheepPalette(s.g);
+  const gy=Math.round(s.y-(lift||0));
+  const bobY=(s.state==="walk"&&!s.drag)?Math.round(Math.sin(s.bob)*0.5):0;
+  const byTop=gy-legLen-bh+bobY;
+  const bx=Math.round(s.x-bw/2);
+
+  ctx.fillStyle="rgba(20,40,16,0.28)";
+  ctx.fillRect(Math.round(s.x-bw/2+1),Math.round(s.y-1),bw-2,3);
+
+  const swing=(s.state==="walk"&&!s.drag)?Math.round(Math.sin(s.bob*1.6)*1.5):0;
+  px(bx+2,byTop+bh,legW,legLen-swing,p.leg);
+  px(bx+5,byTop+bh,legW,legLen+swing,p.leg);
+  px(bx+bw-4-legW,byTop+bh,legW,legLen+swing,p.leg);
+  px(bx+bw-7-legW,byTop+bh,legW,legLen-swing,p.leg);
+  px(bx+2,gy-1,legW,1,"#241d16"); px(bx+bw-4-legW,gy-1,legW,1,"#241d16");
+
+  px(bx-1,byTop-1,bw+2,bh+2,p.out);
+  px(bx,byTop,bw,bh,p.body);
+  px(bx,byTop+bh-2,bw,2,p.shade);
+  if(p.fluff){
+    const n=Math.max(3,Math.round(bw/5));
+    for(let i=0;i<n;i++) px(bx+1+i*Math.round(bw/n),byTop-2,4,3,p.fluff);
+    px(bx-1,byTop+2,2,bh-4,p.body);
+    px(bx+bw-1,byTop+2,2,bh-4,p.body);
+  }else{
+    px(bx+3,byTop+1,4,2,p.shade);
+    px(bx+bw-8,byTop+bh-4,5,2,p.shade);
+    px(bx+Math.round(bw/2)-1,byTop+2,3,3,p.shade);
+    px(bx+bw-6,byTop+1,3,2,p.shade);
+  }
+  px(s.face>0?bx-2:bx+bw,byTop+1,2,3,p.fluff||p.shade);
+
+  const grazing=(s.state==="graze"&&!s.drag);
+  const hw=grown?7:5, hh=grown?6:4;
+  const hx=s.face>0?bx+bw-2:bx-hw+2;
+  const hy=byTop+(grazing?Math.min(bh+legLen-hh-1,bh+2):-1);
+  px(hx-1,hy-1,hw+2,hh+2,p.out);
+  px(hx,hy,hw,hh,p.body);
+  if(p.fluff) px(hx+(s.face>0?0:1),hy-1,hw-1,2,p.fluff);
+  px(hx+(s.face>0?hw-2:0),hy+2,2,2,p.shade);
+  px(hx+(s.face>0?hw-3:1),hy+1,1,1,p.eye);
+  px(hx+(s.face>0?0:hw-1),hy,1,2,p.shade);
+
+  if(s.tied){
+    const tx=Math.round(s.x)+(s.face>0?Math.round(bw/2)+7:-Math.round(bw/2)-8);
+    px(tx-2,gy-1,6,2,"#6b5230");
+    px(tx,gy-19,2,19,"#8a6a3e");
+    px(tx,gy-19,2,2,"#a5814c");
+    px(tx-1,gy-21,4,2,"#a5814c");
+    const ax=tx+1, ay=gy-17, bx2=s.face>0?bx+bw-2:bx+2, by2=byTop+3;
+    for(let i=0;i<=7;i++){
+      const k=i/7, sag=Math.sin(k*Math.PI)*3;
+      px(ax+(bx2-ax)*k,ay+(by2-ay)*k+sag,1,1,"#d8c49a");
+    }
+  }
+  if(s.iv){
+    const ix=Math.round(s.x)+(s.face>0?-bw/2-6:bw/2+5);
+    px(ix,gy-26,1,26,"#b8b8c4");
+    px(ix-1,gy-1,3,1,"#8a8a96");
+    px(ix-2,gy-32,5,7,"#9ee0a0"); px(ix-2,gy-32,5,2,"#d8f4d8");
+    px(ix+(s.face>0?1:-1),gy-25,1,1,"#9ee0a0");
+    px(ix+(s.face>0?1:0),byTop+2,Math.max(1,Math.abs(Math.round(s.x-ix))-2),1,"#7fd0e0");
+  }
+  if(selected===s||inGroup(s)){
+    const c=inGroup(s)?"#ffe08a":"#f2c14e", x0=bx-4, y0=byTop-7, x1=bx+bw+4, y1=gy+2;
+    px(x0,y0,4,1,c); px(x0,y0,1,4,c);
+    px(x1-4,y0,4,1,c); px(x1-1,y0,1,4,c);
+    px(x0,y1-1,4,1,c); px(x0,y1-4,1,4,c);
+    px(x1-4,y1-1,4,1,c); px(x1-1,y1-4,1,4,c);
+  }
+  const tag=s.name+" ("+s.g.sex+")";
+  const tw=textW(tag,1);
+  const col=s.g.sex==="F"?"#ff7a9c":"#79c0ff";
+  px(Math.round(s.x-tw/2)-2,byTop-11,tw+4,8,"rgba(18,14,10,0.55)");
+  drawTextShadow(ctx,tag,Math.round(s.x-tw/2),byTop-9,col,1);
+}
+
+function drawBeam(d){
+  const fade=d.phase==="land"?Math.max(0,1-d.t/1.6):1;
+  const grow=d.phase==="beam"?Math.min(1,d.t/0.45):1;
+  const bottom=d.landY+2, pulse=0.82+0.18*Math.sin(simTime*7);
+  const topW=14*grow, botW=64*grow;
+  /* parted clouds at the top */
+  ctx.globalAlpha=0.85*fade;
+  for(let i=0;i<5;i++){
+    const o=(i-2)*13, cw=20-Math.abs(i-2)*3;
+    px(d.x+o*grow*1.6-cw/2,4+Math.abs(i-2)*3+Math.sin(simTime*1.2+i)*1.5,cw,5,"#efe6d0");
+    px(d.x+o*grow*1.6-cw/2,7+Math.abs(i-2)*3+Math.sin(simTime*1.2+i)*1.5,cw,2,"#cfc4aa");
+  }
+  ctx.globalAlpha=1;
+  /* three-layer cone of light */
+  for(let y=0;y<bottom;y++){
+    const k=y/bottom, w=topW+(botW-topW)*k;
+    ctx.globalAlpha=0.22*fade*pulse*(0.5+0.5*k);
+    px(d.x-w/2,y,w,1,"#ffeaa0");
+    ctx.globalAlpha=0.3*fade*pulse;
+    px(d.x-w*0.3,y,Math.max(1,w*0.6),1,"#fff3c8");
+    ctx.globalAlpha=0.55*fade*pulse;
+    px(d.x-w*0.11,y,Math.max(1,w*0.22),1,"#fffdf0");
+  }
+  /* shimmer bands sliding down the shaft */
+  for(let i=0;i<4;i++){
+    const t=((simTime*0.55+i*0.25)%1), y=Math.round(t*bottom);
+    const w=topW+(botW-topW)*(y/bottom);
+    ctx.globalAlpha=0.3*fade*(1-t);
+    px(d.x-w/2,y,w,2,"#fffdf0");
+  }
+  /* pool of light on the grass */
+  ctx.globalAlpha=0.5*fade*pulse;
+  for(let i=0;i<5;i++){
+    const w=botW*(1-i*0.15);
+    px(d.x-w/2,bottom-2+i,w,1,i<2?"#fffdf0":"#ffeaa0");
+  }
+  ctx.globalAlpha=0.55*fade;
+  for(let i=0;i<9;i++){
+    const a=simTime*1.6+i*0.72, rx=Math.sin(a)*(botW*0.55);
+    px(d.x+rx,bottom-4-Math.abs(Math.cos(a))*4,1,3,"#fffdf0");
+  }
+  ctx.globalAlpha=1;
+  if(d.phase!=="land") drawSheep(d.s,0);
+}
+const TALLY_ORDER=["BLACK TALL","WHITE TALL","BLACK SHORT","WHITE SHORT","BALD TALL","BALD SHORT"];
+function buildOf(s){
+  const legs=legsOf(s.g)==="long"?"TALL":"SHORT";
+  const wool=isBald(s.g)?"BALD":(coatOf(s.g)==="black"?"BLACK":"WHITE");
+  return wool+" "+legs;
+}
+function penTally(){
+  const counts={}; let total=0;
+  for(const s of sheep){
+    if(zoneOf(s)!=="hold"||s.drag) continue;
+    const k=buildOf(s);
+    if(!counts[k]) counts[k]={n:0,m:0,f:0};
+    counts[k].n++; if(s.g.sex==="M") counts[k].m++; else counts[k].f++;
+    total++;
+  }
+  return {rows:TALLY_ORDER.filter(k=>counts[k]).map(k=>({label:k,n:counts[k].n,m:counts[k].m,f:counts[k].f})),total:total};
+}
+function tallyArrow(){ return {x:TALLY.x+TALLY.w-15,y:TALLY.y+2,w:13,h:9}; }
+function tallyW(n){
+  const shown=Math.min(n,20), groups=Math.floor(shown/5), rem=shown%5;
+  let w=groups*12+(rem?rem*2+1:0);
+  if(n>20) w+=(rem?2:0)+textW("+"+(n-20),1)+1;
+  return w;
+}
+function drawTallyMarks(x,y,n,c){
+  let cx=x;
+  const shown=Math.min(n,20), groups=Math.floor(shown/5), rem=shown%5;
+  for(let g=0;g<groups;g++){
+    for(let i=0;i<4;i++) px(cx+i*2,y,1,5,c);
+    for(let k=0;k<8;k++) px(cx-1+k,y+5-Math.round(k*5/7),1,1,c);
+    cx+=12;
+  }
+  for(let i=0;i<rem;i++) px(cx+i*2,y,1,5,c);
+  if(rem) cx+=rem*2+2;
+  if(n>20) drawText(ctx,"+"+(n-20),cx+1,y,c,1);
+}
+function drawTallyBoard(){
+  const t=penTally(), r=TALLY;
+  const rows=t.rows.length, h=12+Math.max(1,rows)*9+4;
+  px(r.x-2,r.y-2,r.w+4,h+4,"#2a2118");
+  px(r.x,r.y,r.w,h,"#4a3a28");
+  px(r.x,r.y,r.w,2,"#6b5230");
+  px(r.x+2,r.y+2,r.w-4,9,"#3a2c1e");
+  drawText(ctx,(tallyMode?"MALE VS. FEMALE TRAITS: ":"TRAIT TALLY : ")+t.total+" SHEEP",r.x+4,r.y+4,"#f2c14e",1);
+  /* mode arrow: forward into the sex split, back again */
+  const a=tallyArrow(), hot=inRect(mouseX,mouseY,a);
+  px(a.x,a.y,a.w,a.h,hot?"#8a6a3e":"#5a4736");
+  px(a.x,a.y,a.w,1,hot?"#c29a52":"#6b5230");
+  const wk=[1,2,3,4,3,2,1], ax=a.x+4, ay=a.y+1;
+  for(let k=0;k<7;k++) px(tallyMode?ax+4-wk[k]:ax,ay+k,wk[k],1,hot?"#fff0c0":"#f2c14e");
+  px(r.x+3,r.y+12,r.w-6,1,"#6b5230");
+  if(!rows){ drawText(ctx,"PEN IS EMPTY",r.x+5,r.y+16,"#9a9484",1); return; }
+  t.rows.forEach((row,i)=>{
+    const y=r.y+16+i*9;
+    const col=row.label.indexOf("BALD")===0?"#e8a89c":(row.label.indexOf("BLACK")===0?"#b8b4c4":"#f4f1e4");
+    drawText(ctx,row.label,r.x+5,y,col,1);
+    if(tallyMode){
+      const tm=row.m+"M", tf=row.f+"F";
+      const x0=r.x+r.w-5-(textW(tm,1)+5+textW(tf,1));
+      drawText(ctx,tm,x0,y,row.m?"#79c0ff":"#6a6a72",1);
+      drawText(ctx,tf,x0+textW(tm,1)+5,y,row.f?"#ff7a9c":"#6a6a72",1);
+    }else{
+      drawTallyMarks(r.x+r.w-5-tallyW(row.n),y,row.n,"#ffe08a");
+    }
+  });
+}
+function drawWheatStalk(x,y,c){
+  px(x+2,y+2,1,7,c); px(x+1,y,2,2,c); px(x+3,y+1,2,2,c); px(x,y+3,2,2,c); px(x+3,y+4,2,2,c);
+}
+function drawWheatButton(){
+  const r=WHEATBTN, pairs=penPairs().length, ok=(wheat>0&&pairs>0);
+  const hot=ok&&inRect(mouseX,mouseY,r);
+  const face=ok?(hot?"#c29a52":"#8a6a3e"):"#5f5a4e";
+  const lip =ok?(hot?"#e0b768":"#a5814c"):"#75705f";
+  const ink =ok?"#fff0c0":"#9a9484";
+  px(r.x-2,r.y-2,r.w+4,r.h+4,"#2a2118");
+  px(r.x,r.y,r.w,r.h,face);
+  px(r.x,r.y,r.w,2,lip);
+  px(r.x,r.y+r.h-2,r.w,2,"#4a3820");
+  drawWheatStalk(r.x+5,r.y+5,ok?"#f2d98a":"#8a8570");
+  const label="WHEAT X"+wheat;
+  drawText(ctx,label,r.x+r.w/2-textW(label,2)/2+5,r.y+4,ink,2);
+  if(ok&&pairs>0) drawText(ctx,pairs+" PAIR"+(pairs===1?"":"S")+" READY",r.x+r.w/2-textW(pairs+" PAIR"+(pairs===1?"":"S")+" READY",1)/2,r.y+r.h+3,"#ffc2d8",1);
+}
+function drawStork(k){
+  const up=Math.floor(k.flap)%2===0;
+  const x=Math.round(k.x), y=Math.round(k.y), d=k.dir;
+  px(x-6,y,12,5,"#f4f4ec");
+  px(x-6,y+4,12,1,"#cfcfc4");
+  px(x+d*6,y-2,4,4,"#f4f4ec");
+  px(x+d*9,y-1,4,1,"#e8933c");
+  px(x+d*7,y-1,1,1,"#2a2118");
+  px(x-2,up?y-4:y+3,8,3,"#e8e8e0");
+  px(x-d*7,y+1,4,2,"#f4f4ec");
+  px(x-d*2,y+5,1,4,"#e8933c"); px(x+d*1,y+5,1,4,"#e8933c");
+  if(!k.dropped){
+    px(x-1,y+5,1,3,"#c8c8bc");
+    px(x-3,y+8,7,6,"#f0e6d2"); px(x-3,y+8,7,2,"#e0d2b4");
+    px(x-1,y+7,3,2,"#f0e6d2");
+  }
+}
+function drawHeart(x,y,a){
+  ctx.globalAlpha=a;
+  px(x,y,2,2,"#ff5c8a"); px(x+3,y,2,2,"#ff5c8a");
+  px(x,y+2,5,2,"#ff5c8a"); px(x+1,y+4,3,1,"#ff5c8a"); px(x+2,y+5,1,1,"#ff5c8a");
+  ctx.globalAlpha=1;
+}
+
+function drawBackground(){
+  px(0,0,W,H,"#3f7530");
+  px(0,0,W,PASTURE.y,"#2e5a26");
+  px(0,PASTURE.y,W,PASTURE.h,"#4e8c3a");
+  for(const t of TUFTS) px(t.x,t.y,t.s,1,"#5da045");
+  for(const f of FLOWERS){ px(f.x,f.y,1,1,f.c); px(f.x,f.y+1,1,1,"#3f7530"); }
+  for(const r of ROCKS){ px(r.x,r.y,3,2,"#8f8f86"); px(r.x,r.y,2,1,"#a8a89e"); }
+  /* road band */
+  px(0,PASTURE.y+PASTURE.h,W,H-(PASTURE.y+PASTURE.h),"#6b5a3c");
+  px(0,PASTURE.y+PASTURE.h,W,2,"#55462e");
+  px(0,ROAD.y+2,W,ROAD.h-2,"#7d6a48");
+  px(0,ROAD.y+2,W,1,"#8d7a56");
+  for(const p of PEBBLES) px(p.x,p.y,1,1,"#6b5a3c");
+  for(let x=0;x<W;x+=18) px(x,ROAD.y+Math.round(ROAD.h*0.55),8,1,"#6b5a3c");
+  seedN=99; drawFence(HOLD,"HOLDING PEN","#ffe9c2",false);
+  seedN=77; drawFence(BREED,"BREEDING PEN","#ffc2d8",true);
+}
+
+function render(){
+  drawBackground();
+  for(const t of trucks) drawTruck(t);
+  drawFactory();
+  const order=sheep.slice().sort((a,b)=>a.y-b.y);
+  for(const s of order) if(!s.drag) drawSheep(s,0);
+  for(const b of bundles){
+    px(Math.round(b.x)-3,Math.round(b.y),7,6,"#f0e6d2");
+    px(Math.round(b.x)-3,Math.round(b.y),7,2,"#e0d2b4");
+    px(Math.round(b.x)-1,Math.round(b.y)-2,3,2,"#f0e6d2");
+  }
+  for(const k of storks) if(k.wait<=0) drawStork(k);
+  for(const h of hearts) drawHeart(Math.round(h.x),Math.round(h.y),Math.min(1,h.t));
+  for(const c of chops){ if(c.wait>0) continue; ctx.globalAlpha=Math.min(1,c.t); drawChop(Math.round(c.x),Math.round(c.y),1); ctx.globalAlpha=1; }
+  for(const p of puffs){
+    ctx.globalAlpha=Math.min(1,p.t*1.4);
+    px(Math.round(p.x),Math.round(p.y),p.m<0.6?1:2,p.m<0.6?1:2,p.c);
+    ctx.globalAlpha=1;
+  }
+  for(const s of order) if(s.drag) drawSheep(s,12);
+  for(const f of floaters){
+    ctx.globalAlpha=Math.min(1,f.t);
+    drawTextShadow(ctx,f.txt,Math.round(f.x-textW(f.txt,2)/2),Math.round(f.y),f.c,2);
+    ctx.globalAlpha=1;
+  }
+  drawWheatButton();
+  drawTallyBoard();
+  if(marquee){
+    const r=marqRect();
+    ctx.globalAlpha=0.14; px(r.x,r.y,r.w,r.h,"#f2c14e"); ctx.globalAlpha=1;
+    const o=Math.floor(rtime*14)%6;
+    for(let x=r.x-o;x<r.x+r.w;x+=6){ px(Math.max(r.x,x),r.y,3,1,"#ffe08a"); px(Math.max(r.x,x),r.y+r.h-1,3,1,"#ffe08a"); }
+    for(let y=r.y-o;y<r.y+r.h;y+=6){ px(r.x,Math.max(r.y,y),1,3,"#ffe08a"); px(r.x+r.w-1,Math.max(r.y,y),1,3,"#ffe08a"); }
+  }
+  if(dragging&&dragSet.length>1){
+    const lbl="X"+dragSet.length;
+    drawSign(ctx,lbl,dragging.x,topOf(dragging)-26,"#ffe08a",2,"#4a3a28","#2a2118");
+  }
+  for(const d of descents) drawBeam(d);
+  if(flash>0){ ctx.globalAlpha=Math.min(0.55,flash); px(0,0,W,H,"#fff6e0"); ctx.globalAlpha=1; }
+  if(capWarn>0) drawSign(ctx,"THE PASTURE IS FULL",W/2,PASTURE.y+10,"#ffe08a",2,"#4a3a28","#2a2118");
+}
+
+/* ---------- hit testing & input ---------- */
+function sheepBox(s){
+  const bw=Math.round(20*(adult(s)?1:0.6));
+  return {x:s.x-bw/2-3,y:topOf(s)-4,w:bw+6,h:legLenOf(s)+bodyH(s)+6};
+}
+function sheepAt(x,y){
+  const order=sheep.slice().sort((a,b)=>b.y-a.y);
+  for(const s of order) if(inRect(x,y,sheepBox(s))) return s;
+  return null;
+}
+function toWorld(ev){
+  const r=cvs.getBoundingClientRect();
+  return {x:(ev.clientX-r.left)*(W/r.width), y:(ev.clientY-r.top)*(H/r.height)};
+}
+let dragging=null, dragSet=[], dragMoved=0;
+function marqRect(){
+  const m=marquee;
+  return {x:Math.min(m.x0,m.x1),y:Math.min(m.y0,m.y1),w:Math.abs(m.x1-m.x0),h:Math.abs(m.y1-m.y0)};
+}
+function rectsOverlap(a,b){ return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y; }
+function beginDrag(list,p){
+  dragSet=list.map(s=>{ s.drag=true; return {s:s,dx:s.x-p.x,dy:s.y-p.y}; });
+  dragging=list[0]; dragMoved=0;
+  cvs.classList.add("grabbing");
+  sndPick();
+}
+function placeSheep(s){
+  const z=zoneOf(s);
+  if(z==="field"){
+    s.x=clamp(s.x,PASTURE.x+8,PASTURE.x+PASTURE.w-8);
+    s.y=clamp(s.y,PASTURE.y+6,PASTURE.y+PASTURE.h-4);
+    if(inRect(s.x,s.y,HOLD)||inRect(s.x,s.y,BREED)) s.y=PASTURE.y+PASTURE.h-20;
+    settle(s);
+  }else{
+    const r=(z==="hold")?HOLD:BREED;
+    s.x=clamp(s.x,r.x+8,r.x+r.w-8); s.y=clamp(s.y,r.y+14,r.y+r.h-5);
+  }
+  s.state="graze"; s.st=rnd(0.6,1.6);
+}
+cvs.addEventListener("pointerdown",ev=>{
+  const p=toWorld(ev);
+  cvs.setPointerCapture(ev.pointerId);
+  if(inRect(p.x,p.y,WHEATBTN)){ feedWheat(); return; }
+  if(inRect(p.x,p.y,tallyArrow())){ tallyMode=tallyMode?0:1; blip(tallyMode?660:520,0.05,"square",0.04); return; }
+  const s=sheepAt(p.x,p.y);
+  if(!s){ marquee={x0:p.x,y0:p.y,x1:p.x,y1:p.y}; return; }
+  if(inGroup(s)&&group.length>1) beginDrag(group.slice(),p);
+  else { group=[]; beginDrag([s],p); }
+});
+cvs.addEventListener("pointermove",ev=>{
+  const m=toWorld(ev); mouseX=m.x; mouseY=m.y;
+  if(marquee){ marquee.x1=m.x; marquee.y1=m.y; return; }
+  if(!dragging) return;
+  dragMoved+=Math.abs(m.x-(dragging.x-dragSet[0].dx))+Math.abs(m.y-(dragging.y-dragSet[0].dy));
+  for(const d of dragSet){ d.s.x=m.x+d.dx; d.s.y=m.y+d.dy; }
+});
+cvs.addEventListener("pointerleave",()=>{mouseX=-99;mouseY=-99;});
+cvs.addEventListener("pointerup",ev=>{
+  const p=toWorld(ev);
+  if(marquee){
+    const r=marqRect();
+    if(r.w<4&&r.h<4){ group=[]; selected=null; }
+    else{
+      group=sheep.filter(s=>rectsOverlap(sheepBox(s),r));
+      selected=(group.length===1)?group[0]:null;
+      if(group.length) blip(520,0.05,"square",0.03);
+    }
+    marquee=null; refreshPanel(); return;
+  }
+  if(!dragging) return;
+  const list=dragSet.map(d=>d.s);
+  dragging=null; dragSet=[];
+  for(const s of list) s.drag=false;
+  cvs.classList.remove("grabbing");
+  if(inRect(p.x,p.y,FACTORY)||inRect(p.x,p.y,CHUTE)){ sellMany(list); refreshPanel(); return; }
+  if(dragMoved<4&&list.length===1){ selected=list[0]; group=[]; }
+  for(const s of list) placeSheep(s);
+  refreshPanel();
+});
+
+function sell(s){
+  const grown=adult(s);
+  const price=grown?PRICE_ADULT:PRICE_LAMB, n=grown?3:1;
+  money+=price; chopCount+=n;
+  unselect(s);
+  const i=sheep.indexOf(s); if(i>=0) sheep.splice(i,1);
+  return {price:price,n:n};
+}
+function sellMany(list){
+  let total=0,n=0;
+  for(const s of list){ const r=sell(s); total+=r.price; n+=r.n; }
+  if(!n) return;
+  puff(CHUTE.x+CHUTE.w/2,CHUTE.y+2,8+Math.min(18,n*2),"#b8b8c4");
+  const bx=FACTORY.x+FACTORY.w+4, by=FACTORY.y+26;
+  for(let i=0;i<Math.min(n,10);i++)
+    chops.push({x:bx,y:by,vx:rnd(12,26),vy:rnd(-34,-18),land:by+rnd(-1,2),t:2.6,wait:0.55+i*0.22,landed:false,spin:0});
+  floater(FACTORY.x+FACTORY.w+30,FACTORY.y-2,"+$"+total,"#7ec850");
+  log(list.length===1
+    ? list[0].name+" ("+list[0].g.sex+") went down the chute. "+n+" lamb chop"+(n>1?"s":"")+" sold for $"+total+"."
+    : list.length+" sheep went down the chute. "+n+" lamb chops sold for $"+total+".");
+  sndSale(); updateHUD();
+}
+
+function buySheep(){
+  if(money<BUY_COST) return;
+  money-=BUY_COST;
+  trucks.push({x:-60,y:ROAD.y+ROAD.h-4,stopX:clamp(W*0.28,60,W-140),phase:"in",t:0,g:randomGenotype()});
+  floater(90,ROAD.y-10,"-$"+BUY_COST,"#e0603c");
+  sndHorn(); updateHUD();
+}
+
+/* ---------- side panel ---------- */
+const panelBody=document.getElementById("panelBody");
+const HINT='<div class="hint">Click a sheep to inspect it.<br><br>Drag sheep with the mouse. Drop them in a pen, or into the chop factory to sell them.<br><br>Drag a box on the grass to pick several sheep at once, then drag any one of them.<br><br>Wheat bought up top can be fed to the breeding pen with the trough button.</div>';
+function refreshPanel(){
+  group=group.filter(s=>sheep.indexOf(s)>=0);
+  if(group.length>1){
+    let adults=0,lambs=0,value=0,chops=0;
+    for(const s of group){
+      if(adult(s)){ adults++; value+=PRICE_ADULT; chops+=3; } else { lambs++; value+=PRICE_LAMB; chops+=1; }
+    }
+    let h='<div class="nm" style="color:var(--accent)">'+group.length+' SHEEP PICKED</div>';
+    h+='<div class="row"><span>ADULTS</span><span>'+adults+'</span></div>';
+    h+='<div class="row"><span>LAMBS</span><span>'+lambs+'</span></div>';
+    h+='<div class="row"><span>CHOP VALUE</span><span>$'+value+' ('+chops+')</span></div>';
+    h+='<button id="sellBtn">SEND ALL TO CHOP CO.</button>';
+    h+='<button id="clrBtn">CLEAR PICK</button>';
+    panelBody.innerHTML=h;
+    document.getElementById("sellBtn").onclick=()=>{ sellMany(group.slice()); group=[]; refreshPanel(); };
+    document.getElementById("clrBtn").onclick=()=>{ group=[]; refreshPanel(); };
+    return;
+  }
+  if(group.length===1&&!selected) selected=group[0];
+  if(!selected||sheep.indexOf(selected)<0){ selected=null; panelBody.innerHTML=HINT; return; }
+  const s=selected;
+  const days=Math.max(0,Math.floor(s.age/60));
+  const bald=isBald(s.g);
+  const wool=bald?"NONE - BALD":(coatOf(s.g)==="black"?"BLACK":"WHITE");
+  const legs=legsOf(s.g)==="long"?"LONG":"SHORT";
+  const zone={field:"OPEN PASTURE",hold:"HOLDING PEN",breed:"BREEDING PEN"}[zoneOf(s)]+(s.tied?" (ROPED)":"");
+  const par=s.parents?(s.parents[0]+" + "+s.parents[1]):(s.divine?"CAME FROM THE SKY":(s.bought?"BOUGHT IN":"FOUNDING STOCK"));
+  const sexCol=s.g.sex==="F"?"var(--fem)":"var(--mal)";
+  let html='<div class="nm" style="color:'+sexCol+'">'+s.name+" ("+s.g.sex+')</div>';
+  html+='<div class="row"><span>SEX</span><span style="color:'+sexCol+'">'+(s.g.sex==="M"?"MALE":"FEMALE")+'</span></div>';
+  html+='<div class="row"><span>WOOL</span><span'+(bald?' style="color:#e8a89c"':'')+'>'+wool+'</span></div>';
+  html+='<div class="row"><span>LEGS</span><span>'+legs+'</span></div>';
+  html+='<div class="row"><span>STAGE</span><span>'+(adult(s)?"ADULT":"LAMB")+'</span></div>';
+  html+='<div class="row"><span>AGE</span><span>'+days+" DAY"+(days===1?"":"S")+'</span></div>';
+  html+='<div class="row"><span>WHERE</span><span>'+zone+'</span></div>';
+  html+='<div class="row"><span>CONDITION</span><span style="color:'+(bald?(s.iv?"#7ec850":"#e0603c"):"#7ec850")+'">'+(bald?(s.iv?"ON DRIP":"FRAIL"):"HEARTY")+'</span></div>';
+  html+='<div class="row"><span>PARENTS</span><span>'+par+'</span></div>';
+  html+='<button id="tieBtn">'+(s.tied?"UNTIE FROM POST":"TIE TO POST")+'</button>';
+  if(bald&&!s.iv) html+='<button id="ivBtn"'+(money<IV_COST?" disabled":"")+'>BUY IV DRIP  $'+IV_COST+'</button>';
+  panelBody.innerHTML=html;
+  const t=document.getElementById("tieBtn");
+  if(t) t.onclick=()=>{
+    if(!selected) return;
+    selected.tied=!selected.tied;
+    if(selected.tied){ selected.state="graze"; selected.st=rnd(1,3); puff(selected.x,selected.y-4,5,"#d8c49a"); }
+    log(selected.name+" ("+selected.g.sex+") was "+(selected.tied?"roped to a post.":"let off the rope."));
+    blip(selected.tied?300:520,0.07,"square",0.04);
+    refreshPanel();
+  };
+  const b=document.getElementById("ivBtn");
+  if(b) b.onclick=()=>{
+    if(money<IV_COST||!selected) return;
+    money-=IV_COST; selected.iv=true;
+    floater(selected.x,topOf(selected)-18,"-$"+IV_COST,"#e0603c");
+    log(selected.name+" ("+selected.g.sex+") was hooked up to a drip.");
+    blip(880,0.12,"sine",0.05);
+    refreshPanel(); updateHUD();
+  };
+}
+
+/* ---------- HUD ---------- */
+const elCash=document.getElementById("cash"), elFlock=document.getElementById("flock"),
+      elDay=document.getElementById("day"), elChops=document.getElementById("chops"),
+      buyBtn=document.getElementById("buy"), elWheat=document.getElementById("wheatN"),
+      wheatBtn=document.getElementById("buyWheat");
+function updateHUD(){
+  elCash.textContent="$"+money;
+  elFlock.textContent=sheep.length;
+  elChops.textContent=chopCount;
+  elDay.textContent=Math.floor(simTime/60)+1;
+  elWheat.textContent=wheat;
+  buyBtn.disabled=(money<BUY_COST);
+  wheatBtn.disabled=(money<WHEAT_COST);
+}
+const spBtns={0:document.getElementById("sp0"),1:document.getElementById("sp1"),2:document.getElementById("sp2"),4:document.getElementById("sp4")};
+function setSpeed(v){ speed=v; for(const k in spBtns) spBtns[k].classList.toggle("on",Number(k)===v); }
+spBtns[0].onclick=()=>setSpeed(0);
+spBtns[1].onclick=()=>setSpeed(1);
+spBtns[2].onclick=()=>setSpeed(2);
+spBtns[4].onclick=()=>setSpeed(4);
+buyBtn.onclick=buySheep;
+wheatBtn.onclick=buyWheat;
+const muteBtn=document.getElementById("mute");
+muteBtn.onclick=()=>{ muted=!muted; muteBtn.textContent="SOUND: "+(muted?"OFF":"ON"); };
+document.getElementById("reset").onclick=()=>{ if(confirm("Start over with a brand new flock?")) init(); };
+window.addEventListener("keydown",e=>{
+  if(e.key==="1")setSpeed(1); else if(e.key==="2")setSpeed(2);
+  else if(e.key==="4")setSpeed(4); else if(e.key===" "){e.preventDefault();setSpeed(speed===0?1:0);}
+});
+
+/* ---------- boot ---------- */
+function init(){
+  sheep=[];storks=[];bundles=[];puffs=[];floaters=[];hearts=[];chops=[];trucks=[];descents=[];
+  divineAt=120;flash=0;group=[];marquee=null;tallyMode=0;
+  money=0;chopCount=0;wheat=0;simTime=0;nextId=1;selected=null;capWarn=0;nameLap=1;
+  document.getElementById("logList").innerHTML="";
+  const seeds=seedFlock();
+  namePool=shuffle(NAMES.filter(n=>!seeds.some(s=>s.n===n)));
+  const cx=PASTURE.x+PASTURE.w/2, cy=PASTURE.y+PASTURE.h*0.56;
+  const gx=Math.min(74,PASTURE.w*0.11), gy=Math.min(48,PASTURE.h*0.14);
+  const corners=[[-1,-1],[1,-1],[-1,1],[1,1]];
+  seeds.forEach((sd,i)=>{
+    const o=corners[i%4], ring=1+Math.floor(i/4)*0.7;
+    const x=clamp(cx+o[0]*gx*ring,PASTURE.x+20,PASTURE.x+PASTURE.w-20);
+    const y=clamp(cy+o[1]*gy*ring,PASTURE.y+30,PASTURE.y+PASTURE.h-14);
+    const sh=makeSheep(sd.n,sd.g,x,y,MATURE+rnd(5,25),null);
+    sh.face=o[0]>0?-1:1;
+    settle(sh);
+    sheep.push(sh);
+  });
+  setSpeed(1);
+  log("A new flock arrives at Wooly Acres.");
+  refreshPanel(); updateHUD();
+}
+function onResize(){
+  const zones=sheep.map(s=>zoneOf(s));
+  const ox=PASTURE?PASTURE.w:1, oy=PASTURE?PASTURE.h:1;
+  const rel=sheep.map(s=>({fx:(s.x-PASTURE.x)/ox,fy:(s.y-PASTURE.y)/oy}));
+  layout();
+  sheep.forEach((s,i)=>{
+    if(zones[i]==="hold"||zones[i]==="breed"){
+      const r=zones[i]==="hold"?HOLD:BREED;
+      s.x=clamp(s.x,r.x+8,r.x+r.w-8); s.y=clamp(s.y,r.y+14,r.y+r.h-5);
+    }else{
+      s.x=clamp(PASTURE.x+rel[i].fx*PASTURE.w,PASTURE.x+8,PASTURE.x+PASTURE.w-8);
+      s.y=clamp(PASTURE.y+rel[i].fy*PASTURE.h,PASTURE.y+6,PASTURE.y+PASTURE.h-4);
+      if(inRect(s.x,s.y,HOLD)||inRect(s.x,s.y,BREED)) s.y=HOLD.y+HOLD.h+20;
+    }
+  });
+}
+window.addEventListener("resize",onResize);
+if(window.ResizeObserver){
+  let ro=new ResizeObserver(()=>onResize());
+  ro.observe(document.getElementById("stage"));
+}
+
+let last=performance.now(), acc=0, hudT=0, panelT=0;
+function frame(now){
+  let dt=(now-last)/1000; last=now;
+  if(dt>0.25) dt=0.25;
+  rtime+=dt;
+  acc+=dt*speed;
+  let guard=0;
+  while(acc>=STEP && guard++<12){ step(STEP); acc-=STEP; }
+  render();
+  hudT+=dt; if(hudT>0.2){ hudT=0; updateHUD(); }
+  panelT+=dt; if(panelT>0.35){ panelT=0; if(selected) refreshPanel(); }
+  requestAnimationFrame(frame);
+}
+layout(); init(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
